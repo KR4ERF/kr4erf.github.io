@@ -24,6 +24,7 @@ IGNORE_FILES = [
 STATIC_PATHS = [
     'extra',
     'images',
+    'dl',
 ]
 
 EXTRA_PATH_METADATA = {

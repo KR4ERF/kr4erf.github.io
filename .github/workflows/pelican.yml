@@ -1,0 +1,65 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build site with Flatpak injection
+        run: |
+          # 1. Fetch gh-pages locally so publishconf.py can scan from it
+          git fetch origin gh-pages:gh-pages || true
+
+          # 2. Build the static site
+          # This automatically copies content/dl/kr4erf.flatpakrepo to output/dl/
+          make publish
+
+          # 3. Inject the software binaries from gh-pages into the output
+          mkdir -p output/dl
+          if git ls-tree -d gh-pages:flatpak > /dev/null 2>&1; then
+            echo "Merging software binaries from gh-pages archive..."
+            git archive gh-pages flatpak | tar -x -C output/dl/
+          fi
+
+
+      - name: Deploy and Archive to gh-pages branch
+        run: |
+          # ghp-import commits the 'output' folder to the 'gh-pages' branch
+          # -n adds .nojekyll, -p pushes to origin, -f forced push
+          # This replaces the branch content with the new build (which includes flatpaks)
+          ghp-import -m "Deploy site and update Flatpak archive [skip ci]" -b gh-pages -n -p -f output/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'output/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

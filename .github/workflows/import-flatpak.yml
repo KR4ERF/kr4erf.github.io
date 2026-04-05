@@ -1,0 +1,103 @@
+name: Import Flatpak Release
+
+on:
+  repository_dispatch:
+    types: [import-flatpak]
+    # Expected client_payload:
+    # {
+    #   "download_url": "https://github.com/user/repo/releases/download/v1.0/app.flatpak",
+    #   "app_id": "com.example.App"
+    # }
+
+permissions:
+  contents: write
+
+jobs:
+  import-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Flatpak & OSTree
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree gnupg
+
+      - name: Import GPG Key and Extract IDs
+        run: |
+          echo "${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}" | gpg --batch --import
+          # Extract the Key ID from the imported private key
+          KEY_ID=$(gpg --list-secret-keys --with-colons | grep '^sec:' | head -n1 | cut -d':' -f5)
+          # Export the public key in Base64
+          PUB_KEY=$(gpg --export $KEY_ID | base64 -w0)
+
+          echo "GPG_KEY_ID=$KEY_ID" >> $GITHUB_ENV
+          echo "GPG_PUB_KEY=$PUB_KEY" >> $GITHUB_ENV
+
+      - name: Download Flatpak Bundle
+        run: |
+          URL="${{ github.event.client_payload.download_url }}"
+          echo "Downloading from: $URL"
+          
+          # -f makes curl fail on server errors; -L follows redirects
+          curl -fL "$URL" -o incoming.flatpak
+          
+          # Verify the file is not empty
+          SIZE=$(stat -c%s "incoming.flatpak")
+          echo "Downloaded size: $SIZE bytes"
+          if [ "$SIZE" -eq 0 ]; then
+            echo "Error: Downloaded file is empty!"
+            exit 1
+          fi
+
+      - name: Initialize / Sync Flatpak Repo from gh-pages
+        run: |
+          mkdir -p work/flatpak
+          git fetch origin gh-pages || true
+          
+          # Use git archive to safely extract the flatpak folder if it exists
+          if git ls-tree -d origin/gh-pages:flatpak > /dev/null 2>&1; then
+            echo "Found existing flatpak repository on gh-pages, syncing..."
+            git archive origin/gh-pages flatpak | tar -x
+            mv flatpak/* work/flatpak/
+            rm -rf flatpak
+          else
+            echo "No existing flatpak repository found. Initializing fresh."
+          fi
+
+          if [ ! -f work/flatpak/config ]; then
+            ostree init --mode=archive-z2 --repo=work/flatpak
+          fi
+
+      - name: Import Bundle into Repo
+        run: |
+          flatpak build-import-bundle --gpg-sign=${{ env.GPG_KEY_ID }} work/flatpak incoming.flatpak
+          flatpak build-update-repo --generate-static-deltas --gpg-sign=${{ env.GPG_KEY_ID }} work/flatpak
+
+      - name: Push Flatpak Repo to gh-pages
+        run: |
+          # We create a clean checkout of gh-pages or a new branch if it doesn't exist
+          TEMP_DEPLOY=$(mktemp -d)
+          git clone --branch gh-pages . $TEMP_DEPLOY || (git init $TEMP_DEPLOY && cd $TEMP_DEPLOY && git checkout -b gh-pages)
+
+          cd $TEMP_DEPLOY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Ensure the flatpak directory exists and is updated
+          mkdir -p flatpak
+          cp -r $GITHUB_WORKSPACE/work/flatpak/* flatpak/
+
+          git add flatpak/
+          git commit -m "Import flatpak binary: ${{ github.event.client_payload.app_id }}" || echo "No changes to binaries"
+          git push origin gh-pages
+
+      - name: Trigger Site Rebuild
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Trigger the Pelican deployment workflow via workflow_dispatch
+          # This ensures the new Flatpak metadata is reflected in the app list immediately
+          gh workflow run pelican.yml --ref main
+

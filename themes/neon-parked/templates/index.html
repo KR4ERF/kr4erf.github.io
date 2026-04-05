@@ -1,98 +1,101 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>{{ SITENAME }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="{{ SITEURL }}/theme/css/neon.css">
-</head>
+{% extends "base.html" %}
 
-<body>
-  <div class="crt"></div>
-  <div class="fog"></div>
-
-  <div class="scene">
-    <div class="sign" id="sign">
-      <div class="indicator off-air">
-        <span class="dot"></span>
-        ON&nbsp;AIR
-      </div>
-
-      <div class="station" id="station"></div>
-      <div class="domain">{{ SITENAME }}</div>
-      <div class="status">SITE UNDER CONSTRUCTION</div>
-      <div class="tagline">TRANSMITTER IDLE — NO CARRIER</div>
-    </div>
+{% block content %}
+<div class="sign" id="sign">
+  <div class="indicator off-air">
+    <span class="dot"></span>
+    ON&nbsp;AIR
   </div>
 
-  <script>
-    (() => {
-      const target = "{{ MYCALL }}";
-      const targetLower = target.toLowerCase();
+  <div class="station" id="station"></div>
+  <div class="domain">{{ SITENAME }}</div>
+  <div class="status">SITE UNDER CONSTRUCTION</div>
+  <div class="tagline" id="tagline">TRANSMITTER IDLE — NO CARRIER</div>
 
-      const sign = document.getElementById("sign");
-      const station = document.getElementById("station");
+  <nav class="links">
+    {% for p in pages %}
+      <a href="/{{ p.url }}">{{ p.title|upper }}</a>
+    {% endfor %}
+  </nav>
+</div>
+{% endblock %}
 
-      let index = 0;
-      let power = 0.6;
-      let decaying = false;
+{% block script %}
+<script>
+  (() => {
+    const target = {{ MYCALL|tojson }};
+    const targetLower = target.toLowerCase();
 
-      const letters = [...target].map(ch => {
-        const span = document.createElement("span");
-        span.className = "letter";
-        span.textContent = ch;
-        span.style.setProperty("--power", power);
-        station.appendChild(span);
-        return span;
+    const sign = document.getElementById("sign");
+    const station = document.getElementById("station");
+    const tagline = document.getElementById("tagline");
+
+    const idleText = "TRANSMITTER IDLE — NO CARRIER";
+    const activeText = "CARRIER DETECTED — WIDEBAND SIGNAL ACTIVE";
+
+    let index = 0;
+    let power = 0.6;
+    let decaying = false;
+
+    const fragment = document.createDocumentFragment();
+    const letters = [...target].map(ch => {
+      const span = document.createElement("span");
+      span.className = "letter";
+      span.textContent = ch;
+      span.style.setProperty("--power", power);
+      fragment.appendChild(span);
+      return span;
+    });
+    station.appendChild(fragment);
+
+    function reset() {
+      index = 0;
+      power = 0.6;
+      sign.classList.remove("on-air", "decaying");
+      tagline.textContent = idleText;
+      letters.forEach(l => {
+        l.classList.remove("lit");
+        l.style.setProperty("--power", power);
       });
+      decaying = false;
+    }
 
-      function reset() {
-        index = 0;
-        power = 0.6;
-        sign.classList.remove("on-air", "decaying");
-        letters.forEach(l => {
-          l.classList.remove("lit");
-          l.style.setProperty("--power", power);
-        });
-        decaying = false;
-      }
+    function decayAll() {
+      sign.classList.add("decaying");
+      let steps = 20;
 
-      function decayAll() {
-        sign.classList.add("decaying");
-        let steps = 20;
+      const timer = setInterval(() => {
+        power -= 0.02;
+        letters.forEach(l => l.style.setProperty("--power", power));
 
-        const timer = setInterval(() => {
-          power -= 0.02;
-          letters.forEach(l => l.style.setProperty("--power", power));
-
-          if (--steps === 0) {
-            clearInterval(timer);
-            reset();
-          }
-        }, 60);
-      }
-
-      document.addEventListener("keydown", e => {
-        if (decaying) return;
-
-        const key = e.key.toLowerCase();
-        if (key !== targetLower[index]) return;
-
-        power = Math.min(power + 0.18, 1.8);
-
-        const letter = letters[index];
-        letter.classList.add("lit");
-        letter.style.setProperty("--power", power);
-
-        index++;
-
-        if (index === targetLower.length) {
-          sign.classList.add("on-air");
-          decaying = true;
-          setTimeout(decayAll, 1200);
+        if (--steps === 0) {
+          clearInterval(timer);
+          reset();
         }
-      });
-    })();
-  </script>
-</body>
-</html>
+      }, 60);
+    }
+
+    document.addEventListener("keydown", e => {
+      if (decaying) return;
+
+      const key = e.key.toLowerCase();
+      if (key !== targetLower[index]) return;
+
+      power = Math.min(power + 0.18, 1.8);
+
+      const letter = letters[index];
+      letter.classList.add("lit");
+      letter.style.setProperty("--power", power);
+
+      index++;
+
+      if (index === targetLower.length) {
+        sign.classList.add("on-air");
+        tagline.textContent = activeText;
+        decaying = true;
+        setTimeout(decayAll, 1200);
+      }
+    });
+  })();
+</script>
+{% endblock %}

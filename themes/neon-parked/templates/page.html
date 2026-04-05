@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} | {{ SITENAME }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+  <header>
+    <h1>{{ page.title|upper }}</h1>
+    <div class="page-meta">
+      {% if page.date %}
+        <time datetime="{{ page.date.strftime('%Y-%m-%d') }}">
+          {{ page.date|strftime('%Y-%m-%d') }}
+        </time>
+      {% endif %}
+    </div>
+  </header>
+
+  <article class="page-content">
+    {% if FLATPAK_APPS %}
+      {% set app_list_html = [] %}
+      {% for app in FLATPAK_APPS %}
+        {% set _ = app_list_html.append('<div><strong>' ~ app ~ '</strong><pre><code>flatpak install --user kr4erf ' ~ app ~ '</code></pre></div>') %}
+      {% endfor %}
+      {{ page.content.replace('<!-- APP_LIST -->', app_list_html|join('')) }}
+    {% else %}
+      {{ page.content.replace('<!-- APP_LIST -->', '*(No apps found in local development)*') }}
+    {% endif %}
+  </article>
+
+  <footer>
+    <nav class="links">
+      <a href="/">BACK TO TRANSMITTER</a>
+    </nav>
+  </footer>
+</div>
+{% endblock %}
+
+{% block script %}
+<script src="/theme/js/copy.js"></script>
+{% endblock %}

@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pages: write
       id-token: write
 
@@ -33,29 +33,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build site with Flatpak injection
+      - name: Build site and inject Flatpak binaries
         run: |
-          # 1. Fetch gh-pages locally so publishconf.py can scan from it
-          git fetch origin gh-pages:gh-pages || true
+          set -o pipefail
 
-          # 2. Build the static site
-          # This automatically copies content/dl/kr4erf.flatpakrepo to output/dl/
+          # 1. Fetch the binary database from gh-pages branch
+          git fetch origin gh-pages || true
+
+          # 2. Build the Pelican site (copies static files like .flatpakrepo)
           make publish
 
-          # 3. Inject the software binaries from gh-pages into the output
-          mkdir -p output/dl
-          if git ls-tree -d gh-pages:dl/flatpak > /dev/null 2>&1; then
-            echo "Merging software binaries from gh-pages archive..."
-            git archive gh-pages dl/flatpak | tar -x -C output/
+          # 3. Merge the binaries into the final output
+          if git ls-tree -d origin/gh-pages:dl/flatpak > /dev/null 2>&1; then
+            echo "Merging software binaries from gh-pages archive into output/..."
+            git archive origin/gh-pages dl/flatpak | tar -x -C output/
+            echo "Merge complete."
+          else
+            echo "No binaries found on gh-pages branch to merge."
           fi
-
-
-      - name: Deploy and Archive to gh-pages branch
-        run: |
-          # ghp-import commits the 'output' folder to the 'gh-pages' branch
-          # -n adds .nojekyll, -p pushes to origin, -f forced push
-          # This replaces the branch content with the new build (which includes flatpaks)
-          ghp-import -m "Deploy site and update Flatpak archive [skip ci]" -b gh-pages -n -p -f output/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

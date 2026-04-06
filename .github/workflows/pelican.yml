@@ -39,9 +39,9 @@ jobs:
 
           # 3. Inject the software binaries from gh-pages into the output
           mkdir -p output/dl
-          if git ls-tree -d gh-pages:flatpak > /dev/null 2>&1; then
+          if git ls-tree -d gh-pages:dl/flatpak > /dev/null 2>&1; then
             echo "Merging software binaries from gh-pages archive..."
-            git archive gh-pages flatpak | tar -x -C output/dl/
+            git archive gh-pages dl/flatpak | tar -x -C output/
           fi
 
 

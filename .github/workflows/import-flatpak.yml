@@ -56,12 +56,12 @@ jobs:
           mkdir -p work/flatpak
           git fetch origin gh-pages || true
           
-          # Use git archive to safely extract the flatpak folder if it exists
-          if git ls-tree -d origin/gh-pages:flatpak > /dev/null 2>&1; then
+          # Use git archive to safely extract the dl/flatpak folder if it exists
+          if git ls-tree -d origin/gh-pages:dl/flatpak > /dev/null 2>&1; then
             echo "Found existing flatpak repository on gh-pages, syncing..."
-            git archive origin/gh-pages flatpak | tar -x
-            mv flatpak/* work/flatpak/
-            rm -rf flatpak
+            git archive origin/gh-pages dl/flatpak | tar -x
+            mv dl/flatpak/* work/flatpak/
+            rm -rf dl
           else
             echo "No existing flatpak repository found. Initializing fresh."
           fi
@@ -77,27 +77,18 @@ jobs:
 
       - name: Push Flatpak Repo to gh-pages
         run: |
-          # We create a clean checkout of gh-pages or a new branch if it doesn't exist
-          TEMP_DEPLOY=$(mktemp -d)
-          git clone --branch gh-pages . $TEMP_DEPLOY || (git init $TEMP_DEPLOY && cd $TEMP_DEPLOY && git checkout -b gh-pages)
+          # 1. Clone the branch specifically to avoid 'origin' issues and ensure we have all files
+          git clone --depth 1 --branch gh-pages https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages-branch
 
-          cd $TEMP_DEPLOY
+          # 2. Update the dl/flatpak folder inside the checkout
+          mkdir -p gh-pages-branch/dl/flatpak
+          cp -r work/flatpak/* gh-pages-branch/dl/flatpak/
+
+          # 3. Commit and push (this preserves existing HTML/CSS files)
+          cd gh-pages-branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Ensure the flatpak directory exists and is updated
-          mkdir -p flatpak
-          cp -r $GITHUB_WORKSPACE/work/flatpak/* flatpak/
-
-          git add flatpak/
-          git commit -m "Import flatpak binary: ${{ github.event.client_payload.app_id }}" || echo "No changes to binaries"
+          git add dl/flatpak/
+          git commit -m "Import flatpak binary: ${{ github.event.client_payload.app_id }}" || echo "No changes"
           git push origin gh-pages
-
-      - name: Trigger Site Rebuild
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Trigger the Pelican deployment workflow via workflow_dispatch
-          # This ensures the new Flatpak metadata is reflected in the app list immediately
-          gh workflow run pelican.yml --ref main
 

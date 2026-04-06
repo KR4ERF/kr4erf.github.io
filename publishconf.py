@@ -33,7 +33,7 @@ FLATPAK_APPS = []
 try:
     # Use the local gh-pages branch we just fetched
     # App refs look like com.example.App/x86_64/stable
-    tree_out = subprocess.run(['git', 'ls-tree', '-r', '--name-only', 'gh-pages:flatpak/refs/heads/app'], capture_output=True, text=True)
+    tree_out = subprocess.run(['git', 'ls-tree', '-r', '--name-only', 'gh-pages:dl/flatpak/refs/heads/app'], capture_output=True, text=True)
     if tree_out.returncode == 0:
         for line in tree_out.stdout.strip().split('\n'):
             if line:

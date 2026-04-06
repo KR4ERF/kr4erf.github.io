@@ -9,6 +9,11 @@ on:
     #   "app_id": "com.example.App"
     # }
 
+# Ensure only one deployment or import runs at a time to prevent race conditions on gh-pages
+concurrency:
+  group: "gh-pages-write"
+  cancel-in-progress: false
+
 permissions:
   contents: write
 

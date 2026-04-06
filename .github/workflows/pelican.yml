@@ -4,6 +4,11 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
+# Ensure only one deployment or import runs at a time to prevent race conditions on gh-pages
+concurrency:
+  group: "gh-pages-write"
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest

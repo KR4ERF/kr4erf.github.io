@@ -4,9 +4,9 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-# Ensure only one deployment or import runs at a time to prevent race conditions on gh-pages
+# Ensure only one deployment or import runs at a time to prevent race conditions on flatpak-repo
 concurrency:
-  group: "gh-pages-write"
+  group: "flatpak-repo-write"
   cancel-in-progress: false
 
 jobs:
@@ -37,19 +37,19 @@ jobs:
         run: |
           set -o pipefail
 
-          # 1. Fetch the binary database from gh-pages branch
-          git fetch origin gh-pages || true
+          # 1. Fetch the binary database from flatpak-repo branch
+          git fetch origin flatpak-repo || true
 
           # 2. Build the Pelican site (copies static files like .flatpakrepo)
           make publish
 
           # 3. Merge the binaries into the final output
-          if git ls-tree -d origin/gh-pages:dl/flatpak/repo > /dev/null 2>&1; then
-            echo "Merging software binaries from gh-pages archive into output/..."
-            git archive origin/gh-pages dl/flatpak/repo | tar -x -C output/
+          if git ls-tree -d origin/flatpak-repo:dl/flatpak/repo > /dev/null 2>&1; then
+            echo "Merging software binaries from flatpak-repo archive into output/..."
+            git archive origin/flatpak-repo dl/flatpak/repo | tar -x -C output/
             echo "Merge complete."
           else
-            echo "No binaries found on gh-pages branch to merge."
+            echo "No binaries found on flatpak-repo branch to merge."
           fi
 
       - name: Setup Pages

@@ -17,13 +17,13 @@ CATEGORY_FEED_ATOM = "feeds/{slug}.atom.xml"
 
 DELETE_OUTPUT_DIRECTORY = True
 
-# Dynamically generate the list of apps from the gh-pages branch
+# Dynamically generate the list of apps from the flatpak-repo branch
 # This list is used by the templates to show available software.
 FLATPAK_APPS = []
 try:
-    # Check origin/gh-pages directly as it is guaranteed to exist in CI if apps are published
+    # Check origin/flatpak-repo directly as it is guaranteed to exist in CI if apps are published
     tree_out = subprocess.run(
-        ['git', 'ls-tree', '-r', '--name-only', 'origin/gh-pages:dl/flatpak/repo/refs/heads/app'],
+        ['git', 'ls-tree', '-r', '--name-only', 'origin/flatpak-repo:dl/flatpak/repo/refs/heads/app'],
         capture_output=True, text=True
     )
     if tree_out.returncode == 0:

@@ -4,9 +4,9 @@ on:
   repository_dispatch:
     types: [import-flatpak]
 
-# Ensure only one deployment or import runs at a time to prevent race conditions on gh-pages
+# Ensure only one deployment or import runs at a time to prevent race conditions on flatpak-repo
 concurrency:
-  group: "gh-pages-write"
+  group: "flatpak-repo-write"
   cancel-in-progress: false
 
 permissions:
@@ -44,16 +44,15 @@ jobs:
             exit 1
           fi
 
-      - name: Initialize / Sync Flatpak Repo from gh-pages
+      - name: Initialize / Sync Flatpak Repo from flatpak-repo
         run: |
           mkdir -p work/flatpak/repo
-          git fetch origin gh-pages || true
+          git fetch origin flatpak-repo || true
           
-          if git ls-tree -d origin/gh-pages:dl/flatpak/repo > /dev/null 2>&1; then
-            echo "Found existing flatpak repository on gh-pages, syncing..."
-            git archive origin/gh-pages dl/flatpak/repo | tar -x
-            mv dl/flatpak/repo/* work/flatpak/repo/
-            rm -rf dl
+          if git ls-tree -d origin/flatpak-repo:dl/flatpak/repo > /dev/null 2>&1; then
+            echo "Found existing flatpak repository on flatpak-repo, syncing..."
+            # Extract directly into the target directory, stripping 'dl/flatpak/repo/' from the paths
+            git archive origin/flatpak-repo dl/flatpak/repo | tar -x --strip-components=3 -C work/flatpak/repo/
           else
             echo "No existing flatpak repository found. Initializing fresh."
           fi
@@ -69,34 +68,34 @@ jobs:
           flatpak build-import-bundle --gpg-sign=$KEY_ID work/flatpak/repo incoming.flatpak
           flatpak build-update-repo --generate-static-deltas --gpg-sign=$KEY_ID work/flatpak/repo
 
-      - name: Push Flatpak Repo to gh-pages
+      - name: Push Flatpak Repo to flatpak-repo
         run: |
           # 1. Check if the branch exists on the remote
-          if git ls-remote --exit-code --heads https://github.com/${{ github.repository }}.git gh-pages; then
+          if git ls-remote --exit-code --heads https://github.com/${{ github.repository }}.git flatpak-repo; then
             echo "Branch exists, cloning..."
-            git clone --depth 1 --branch gh-pages https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git gh-pages-branch
+            git clone --depth 1 --branch flatpak-repo https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git flatpak-repo-branch
           else
             echo "Branch does not exist, initializing empty repository..."
-            mkdir gh-pages-branch
-            cd gh-pages-branch
+            mkdir flatpak-repo-branch
+            cd flatpak-repo-branch
             git init
             git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-            git checkout --orphan gh-pages
+            git checkout --orphan flatpak-repo
             cd ..
           fi
 
           # 2. Update the dl/flatpak/repo folder using rsync to remove deleted/pruned files
-          mkdir -p gh-pages-branch/dl/flatpak/repo
-          rsync -a --delete work/flatpak/repo/ gh-pages-branch/dl/flatpak/repo/
+          mkdir -p flatpak-repo-branch/dl/flatpak/repo
+          rsync -a --delete work/flatpak/repo/ flatpak-repo-branch/dl/flatpak/repo/
 
           # 3. Commit and push
-          cd gh-pages-branch
+          cd flatpak-repo-branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add dl/flatpak/repo/
 
           APP_ID="${APP_ID:-UnknownApp}"
           git commit -m "Import flatpak binary: $APP_ID" || echo "No changes"
-          git push -u origin gh-pages
+          git push -u origin flatpak-repo
         env:
           APP_ID: ${{ github.event.client_payload.app_id }}

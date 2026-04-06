@@ -61,6 +61,9 @@ jobs:
             ostree init --mode=archive-z2 --repo=work/flatpak/repo
           fi
 
+          # Ensure all necessary ostree directories exist (git doesn't track empty dirs)
+          mkdir -p work/flatpak/repo/refs/heads work/flatpak/repo/refs/remotes work/flatpak/repo/refs/mirrors work/flatpak/repo/objects work/flatpak/repo/state work/flatpak/repo/tmp work/flatpak/repo/extensions
+
       - name: Import Bundle into Repo
         run: |
           # Use the Key ID provided by the import-gpg action

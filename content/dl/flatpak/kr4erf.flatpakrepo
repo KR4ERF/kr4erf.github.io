@@ -1,6 +1,6 @@
 [Flatpak Repo]
 Title=KR4ERF Repository
-Url=https://dl.kr4erf.radio/flatpak/
+Url=https://dl.kr4erf.radio/flatpak/repo/
 Homepage=https://kr4erf.radio/
 Comment=Flatpak repository for KR4ERF software
 Description=Third-party software distributed by KR4ERF.

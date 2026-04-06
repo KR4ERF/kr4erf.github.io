@@ -7,7 +7,7 @@ To install software from the KR4ERF repository, you must first add it to your sy
 Run the following command in your terminal:
 
 ```bash
-flatpak remote-add --user --if-not-exists kr4erf https://dl.kr4erf.radio/kr4erf.flatpakrepo
+flatpak remote-add --user --if-not-exists kr4erf https://dl.kr4erf.radio/flatpak/kr4erf.flatpakrepo
 ```
 
 ### 2. Install Software

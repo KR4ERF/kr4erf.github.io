@@ -31,10 +31,11 @@ jobs:
           gpg_private_key: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
 
       - name: Download Flatpak Bundle
+        env:
+          DOWNLOAD_URL: ${{ github.event.client_payload.download_url }}
         run: |
-          URL="${{ github.event.client_payload.download_url }}"
-          echo "Downloading from: $URL"
-          curl -fL "$URL" -o incoming.flatpak
+          echo "Downloading from: $DOWNLOAD_URL"
+          curl -fL "$DOWNLOAD_URL" -o incoming.flatpak
           
           SIZE=$(stat -c%s "incoming.flatpak")
           echo "Downloaded size: $SIZE bytes"
@@ -45,28 +46,28 @@ jobs:
 
       - name: Initialize / Sync Flatpak Repo from gh-pages
         run: |
-          mkdir -p work/flatpak
+          mkdir -p work/flatpak/repo
           git fetch origin gh-pages || true
           
-          if git ls-tree -d origin/gh-pages:dl/flatpak > /dev/null 2>&1; then
+          if git ls-tree -d origin/gh-pages:dl/flatpak/repo > /dev/null 2>&1; then
             echo "Found existing flatpak repository on gh-pages, syncing..."
-            git archive origin/gh-pages dl/flatpak | tar -x
-            mv dl/flatpak/* work/flatpak/
+            git archive origin/gh-pages dl/flatpak/repo | tar -x
+            mv dl/flatpak/repo/* work/flatpak/repo/
             rm -rf dl
           else
             echo "No existing flatpak repository found. Initializing fresh."
           fi
 
-          if [ ! -f work/flatpak/config ]; then
-            ostree init --mode=archive-z2 --repo=work/flatpak
+          if [ ! -f work/flatpak/repo/config ]; then
+            ostree init --mode=archive-z2 --repo=work/flatpak/repo
           fi
 
       - name: Import Bundle into Repo
         run: |
           # Use the Key ID provided by the import-gpg action
           KEY_ID="${{ steps.import-gpg.outputs.keyid }}"
-          flatpak build-import-bundle --gpg-sign=$KEY_ID work/flatpak incoming.flatpak
-          flatpak build-update-repo --generate-static-deltas --gpg-sign=$KEY_ID work/flatpak
+          flatpak build-import-bundle --gpg-sign=$KEY_ID work/flatpak/repo incoming.flatpak
+          flatpak build-update-repo --generate-static-deltas --gpg-sign=$KEY_ID work/flatpak/repo
 
       - name: Push Flatpak Repo to gh-pages
         run: |
@@ -83,14 +84,18 @@ jobs:
             cd ..
           fi
 
-          # 2. Update the dl/flatpak folder using rsync to remove deleted/pruned files
-          mkdir -p gh-pages-branch/dl/flatpak
-          rsync -a --delete work/flatpak/ gh-pages-branch/dl/flatpak/
+          # 2. Update the dl/flatpak/repo folder using rsync to remove deleted/pruned files
+          mkdir -p gh-pages-branch/dl/flatpak/repo
+          rsync -a --delete work/flatpak/repo/ gh-pages-branch/dl/flatpak/repo/
 
           # 3. Commit and push
           cd gh-pages-branch
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dl/flatpak/
-          git commit -m "Import flatpak binary: ${{ github.event.client_payload.app_id }}" || echo "No changes"
+          git add dl/flatpak/repo/
+
+          APP_ID="${APP_ID:-UnknownApp}"
+          git commit -m "Import flatpak binary: $APP_ID" || echo "No changes"
           git push -u origin gh-pages
+        env:
+          APP_ID: ${{ github.event.client_payload.app_id }}

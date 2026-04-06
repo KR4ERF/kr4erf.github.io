@@ -23,7 +23,7 @@ FLATPAK_APPS = []
 try:
     # Check origin/gh-pages directly as it is guaranteed to exist in CI if apps are published
     tree_out = subprocess.run(
-        ['git', 'ls-tree', '-r', '--name-only', 'origin/gh-pages:dl/flatpak/refs/heads/app'],
+        ['git', 'ls-tree', '-r', '--name-only', 'origin/gh-pages:dl/flatpak/repo/refs/heads/app'],
         capture_output=True, text=True
     )
     if tree_out.returncode == 0:

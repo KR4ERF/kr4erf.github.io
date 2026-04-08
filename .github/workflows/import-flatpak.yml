@@ -30,17 +30,25 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
 
-      - name: Download Flatpak Bundle
+      - name: Download Flatpak Repo Archive
         env:
           DOWNLOAD_URL: ${{ github.event.client_payload.download_url }}
         run: |
           echo "Downloading from: $DOWNLOAD_URL"
-          curl -fL "$DOWNLOAD_URL" -o incoming.flatpak
-          
-          SIZE=$(stat -c%s "incoming.flatpak")
+          curl -fL "$DOWNLOAD_URL" -o incoming-repo.tar.zst
+
+          SIZE=$(stat -c%s "incoming-repo.tar.zst")
           echo "Downloaded size: $SIZE bytes"
           if [ "$SIZE" -eq 0 ]; then
             echo "Error: Downloaded file is empty!"
+            exit 1
+          fi
+
+          mkdir -p incoming-repo
+          tar -x --zstd -f incoming-repo.tar.zst -C incoming-repo/ --strip-components=1
+
+          if [ ! -f incoming-repo/config ]; then
+            echo "Error: Extracted archive does not look like an ostree repo (missing config)!"
             exit 1
           fi
 
@@ -64,12 +72,35 @@ jobs:
           # Ensure all necessary ostree directories exist (git doesn't track empty dirs)
           mkdir -p work/flatpak/repo/refs/heads work/flatpak/repo/refs/remotes work/flatpak/repo/refs/mirrors work/flatpak/repo/objects work/flatpak/repo/state work/flatpak/repo/tmp work/flatpak/repo/extensions
 
-      - name: Import Bundle into Repo
+      - name: Import Repo and Update
         run: |
-          # Use the Key ID provided by the import-gpg action
           KEY_ID="${{ steps.import-gpg.outputs.keyid }}"
-          flatpak build-import-bundle --gpg-sign=$KEY_ID work/flatpak/repo incoming.flatpak
-          flatpak build-update-repo --generate-static-deltas --gpg-sign=$KEY_ID work/flatpak/repo
+
+          # Collect all refs from the incoming repo (includes app + .Locale + .Debug etc.)
+          REFS=$(ostree refs --repo=incoming-repo)
+          echo "Incoming refs:"
+          echo "$REFS"
+
+          # Pull all refs from the local incoming repo into the destination repo
+          ostree pull-local \
+            --repo=work/flatpak/repo \
+            incoming-repo \
+            $REFS
+
+          # Re-sign all refs now present in the destination repo
+          for REF in $(ostree refs --repo=work/flatpak/repo); do
+            ostree gpg-sign \
+              --repo=work/flatpak/repo \
+              --gpg-homedir="$HOME/.gnupg" \
+              "$REF" \
+              "$KEY_ID"
+          done
+
+          # Rebuild summary and generate static deltas as before
+          flatpak build-update-repo \
+            --generate-static-deltas \
+            --gpg-sign="$KEY_ID" \
+            work/flatpak/repo
 
       - name: Push Flatpak Repo to flatpak-repo
         run: |
